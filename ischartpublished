@@ -40,7 +40,11 @@ def read_remote_index(repo_url):
     returns the full index.yaml after loading
     """
     url = repo_url + "/index.yaml"
-    r = requests.get(url)
+
+    remote_user = os.getenv("HELM_REPO_USER", "anonymous")
+    remote_pass = os.getenv("HELM_REPO_PASS", "")
+    r = requests.get(url, auth=(remote_user, remote_pass))
+    # NOTE.. I've not tested this against anon repos now
     try:
         return yaml.safe_load(r.text)
     except:
@@ -59,6 +63,11 @@ if __name__ == '__main__':
     print("{}:{} (local) chart".format(local_name, local_version))
 
     remote = read_remote_index(repo)
+    if not remote['entries']:
+        print("Something went wrong talking the the chart repo")
+        print("remote data:" + remote)
+        sys.exit(2)
+
     entries = remote['entries']
     if local_name in entries:
         """
@@ -85,4 +94,5 @@ if __name__ == '__main__':
             local_name, local_version))
         sys.exit(0)
     sys.exit(1)
+
 
