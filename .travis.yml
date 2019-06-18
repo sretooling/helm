@@ -7,5 +7,5 @@ services: docker
 
 script:
   - make build
-  - if [ "${TRAVIS_PULL_REQUEST}" == "master" ]; then make publish-version  ; fi
-  - if [ "${TRAVIS_BRANCH}" == "master" -a "${TRAVIS_PULL_REQUEST}" == "false" ]; then make publish-latest ; fi
+  - if [ "${TRAVIS_PULL_REQUEST}" == "true" ]; then make publish-version  ; fi
+  - if [ "${TRAVIS_BRANCH}" == "master" -a "${TRAVIS_PULL_REQUEST}" == "false" ]; then make publish-all ; fi

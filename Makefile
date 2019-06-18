@@ -19,6 +19,8 @@ export IMG     := "$(APP):$(TAG)"
 build: ## Build the container
 	docker build -t $(IMG) .
 
+publish-all: login publish-version publish-latest
+
 publish-latest: tag-latest login ## Publish the `latest` taged container to ECR
 	@echo 'publish latest to $(DOCKER_REPO)'
 	docker push $(APP):latest
