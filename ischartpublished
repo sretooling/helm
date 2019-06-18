@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+
+import requests
+import yaml
+import os
+import sys
+
+
+def find_chart_yaml(dir):
+    """
+    try to find Chart.yaml inside a directory
+    """
+    dpath = os.path.normpath(dir)
+    candidate = dpath + "/Chart.yaml"
+    if os.path.isfile(candidate):
+        return candidate
+    else:
+        return None
+
+
+def get_local_chart_data(path):
+    f = find_chart_yaml(path)
+    if f:
+        data_local = read_yaml_file(f)
+        return data_local
+    else:
+        print("error finding Chart.yaml in " + path)
+        sys.exit(127)
+
+
+def read_yaml_file(file):
+    y = yaml.safe_load(open(file, "r"))
+    return(y)
+
+
+def read_remote_index(repo_url):
+    """
+    read and load /index.yaml from a remote chart repo
+    repo_url should look like = "https://charts.demo.com"
+    returns the full index.yaml after loading
+    """
+    url = repo_url + "/index.yaml"
+    r = requests.get(url)
+    try:
+        return yaml.safe_load(r.text)
+    except:
+        print("error getting yaml from {}".format(url))
+        sys.exit(127)
+
+
+if __name__ == '__main__':
+
+
+    chart = sys.argv[1]
+    repo = sys.argv[2]
+    local = get_local_chart_data(chart)
+    local_name = local['name']
+    local_version = local['version']
+    print("{}:{} (local) chart".format(local_name, local_version))
+
+    remote = read_remote_index(repo)
+    entries = remote['entries']
+    if local_name in entries:
+        """
+        this chart exists remotely, lets check if there is a matching version remotely
+        """
+        print("  " + local_name + " is known in remote repo..")
+        for i in remote['entries'][local_name]:
+            if local_version == i['version']:
+                """
+                this (chart) version exists remotely already
+                """
+                print("  {}:{} already exists remotely".format(
+                    local_name, local_version))
+                sys.exit(1)
+            else:
+                print("  {} exists but version: {} is not available remotely".format(
+                    local_name, local_version))
+                sys.exit(0)
+    else:
+        """
+        this chart doesn't exist remotely.. push it
+        """
+        print("  {}:{} does not exist remotely.. push it".format(
+            local_name, local_version))
+        sys.exit(0)
+    sys.exit(1)
+

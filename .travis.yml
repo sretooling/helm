@@ -1,0 +1,17 @@
+env:
+  global:
+    - COMMIT=${TRAVIS_COMMIT::6}
+    - PROJECT=helm
+
+language: bash
+services: docker
+
+script:
+  - docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
+  - export REPO=${DOCKER_USER}/${PROJECT}
+  - docker build -t ${REPO}:${COMMIT} .
+# - export TAG=`if [ "$TRAVIS_BRANCH" == "master" ]; then echo "latest"; else echo $TRAVIS_BRANCH ; fi`
+# - echo $REPO:$TAG:$COMMIT
+# — docker tag $REPO:$COMMIT $REPO:$TAG
+# — docker tag $REPO:$COMMIT $REPO:${TRAVIS_BRANCH}-${COMMIT}
+# — docker push $REPO

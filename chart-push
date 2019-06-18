@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+
+set +e
+for CHART in $@ ; do
+  if [ -d "${CHART}" ]; then
+    echo "[== checking: ${CHART} against ${HELM_REPO_HOST} ==]"
+    /ischartpublished "${CHART}" "${HELM_REPO_HOST}"
+    rc=$?
+    echo "[== rc:${rc} ==]"
+    # that script exits with a 1 if we should push
+    if [ "X$rc" == "X0" ]; then
+      set -eu
+      helm push \
+        --username="${HELM_REPO_USER}" \
+        --password="${HELM_REPO_PASS}" \
+        "${CHART}" \
+        "${HELM_REPO_HOST}"
+      set +e
+    fi
+  fi
+done
+
+exit 0
+
