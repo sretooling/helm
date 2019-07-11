@@ -12,7 +12,7 @@ timeout = time.time() + 300
 @click.option('--namespace', default='dev', help='Namespace')
 @click.option('--container', default='sample-spring', help='Container')
 @click.option('--tag', default='latest', help='Desired tag')
-@click.option('--prometheus', default='https://prometheus.example.com/api/v1/', help='URL of prometheus endpoint')
+@click.option('--prometheus', default='https://prometheus.example.com', help='URL of prometheus endpoint')
 def validate_tags(namespace, container, tag, prometheus):
 
     query = """
@@ -22,8 +22,8 @@ def validate_tags(namespace, container, tag, prometheus):
                 namespace,
                 container,
         )
-        
-    api_url = '{0}query?query={1}'.format(prometheus, query)
+
+    api_url = '{0}/api/v1/query?query={1}'.format(prometheus, query)
 
     response = requests.get(api_url)
 
