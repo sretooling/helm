@@ -9,6 +9,7 @@ RUN tar xvf helm.tgz && chmod +x linux-amd64/helm
 
 ###
 FROM alpine
+ENV PYTHONUNBUFFERED=1
 RUN apk --update --upgrade add bash git py3-click py3-requests py3-yaml
 COPY --from=0 /src/linux-amd64/helm /bin/.
 RUN helm init --client-only && \
