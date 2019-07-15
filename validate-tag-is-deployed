@@ -6,13 +6,17 @@ import sys
 import time
 
 
+
+
 @click.command()
 @click.option("--timeout", default=300, help="How long to keep trying for")
+@click.option("--delay", default=10, help="Delay between attempts")
 @click.option("--namespace", default="dev", help="Namespace to search")
 @click.option("--container", default="sample-spring", help="Container name (NOTE.. not pod or deployment)")
 @click.option("--tag", default='latest', help="Desired tag")
-@click.option("--prometheus", default="https://prometheus.example.com", help="URL of prometheus endpoint")
-def validate_tags(namespace, container, tag, prometheus, timeout):
+@click.option("--prometheus", default="https://prometheus.example.com", help="URL of prometheus endpoint" )
+def validate_tags(namespace, container, tag, prometheus, timeout, delay):
+
     # calculate the scripts "deadline".. we'll exit at this point
     deadline = time.time() + int(timeout)
     # NOTE: assumes kube-state-metrics
@@ -22,74 +26,83 @@ def validate_tags(namespace, container, tag, prometheus, timeout):
         )
     api_url = '{0}/api/v1/query?query={1}'.format(prometheus, query)
 
-    print("Asking prometheus about: containers:{}, in namespace: {} with tag: {}".format(
+    msg = """
+[-] validating deployment with the following parameters
+    prometheus: {}
+    containers: {}
+    namespace: {}
+    tag: {}""".format(
+        prometheus,
         container,
         namespace,
         tag)
-    )
+    print(msg)
 
+    print("[ ] prometheus query: {}".format(query))
     while time.time() < deadline:
 
         try:
-            print("Connecting to {}, with query: {}".format(
-                prometheus,
-                query
-                )
-            )
             response = requests.get(api_url)
-            if response.status_code != 200:
-                print('[!] Request to {} failed'.format(api_url))
-            else: #we got a 200
-                print("[ ] got a 200 on the query (good)")
-                json_data = response.json()
-                # TODO: logging.debug
-                # print(json_data)
-                metrics = json_data['data']['result']
-                tags = list(map(lambda x: x['metric']['image'].split(":")[1], metrics))
-
-                # Now we must make some assumptions
-                # 1. There is ONLY supposed to be on deployed container matching your tag
-                #    as a rollout/deploy occurs two tags will exist
-                #    if that is a success you're new deployment will be enforced and the old
-                #    replica-set (rc) will get deleted..
-                #
-                # TL;DR
-                # This falls over if you have more than 1 deployment in the destination namespace
-                # that is using other tags than the one we're querying for
-                # Its possible to get around this with more elegant queries
-                #
-                # 0 results.. there are no containers matching your query.. ensure u match the container name..
-                #   not pod/deploy name
-                # 1 result.. a graceful rollout was successful and only 1 deployed tag exists
-                # 2 (upwards).. mixed states.. failed deployment, other (same named) containers in other deployments etc..
-
-                if len(tags) == 0:
-                    print("[ ] Failed... there are no containers:{}, in namespace: {} with tag: {}".format(
-                        container,
-                        namespace,
-                        tag)
-                    )
-
-                if len(tags) == 1:
-                    print("[ ] Only 1 tag match for containers:{}, in namespace: {} with tag: {}".format(
-                        container,
-                        namespace,
-                        tag)
-                    )
-                    if tags[0] != tag:
-                        print("[!] Tags don't match.. maybe the deployment didn't happen yet?")
-                    else:
-                        print("[*] Validation successful!")
-                        #TODO: nice to exit with info on how long this took
-                        sys.exit(0)
-                if len(tags) > 1:
-                    print("[!] There are multiple tags deployed with this namespace/container combo")
-                    print("[!] Namely: {}" + str(tags))
-            print("[ ] Retrying in 5s")
-            time.sleep(5)
         except requests.exceptions.RequestException as e:
-            print e
+            print(e)
             sys.exit(1)
+
+        if response.status_code != 200:
+            print('[!] request to {} failed'.format(api_url))
+        elif response.status_code == 400:
+            print("[!] bad query..")
+            print(response.text)
+            sys.exit(1)
+        else:
+            json_data = response.json()
+            # TODO: logging.debug
+            # print(json_data)
+            metrics = json_data['data']['result']
+            tags = list(map(lambda x: x['metric']['image'].split(":")[1], metrics))
+            # Now we must make some assumptions
+            # 1. There is ONLY supposed to be on deployed container matching your tag
+            #    as a rollout/deploy occurs two tags will exist
+            #    if that is a success you're new deployment will be enforced and the old
+            #    replica-set (rc) will get deleted..
+            #
+            # TL;DR
+            # This falls over if you have more than 1 deployment in the destination namespace
+            # that is using other tags than the one we're querying for
+            # Its possible to get around this with more elegant queries
+            #
+            # 0 results.. there are no containers matching your query.. ensure u match the container name..
+            #   not pod/deploy name
+            # 1 result.. a graceful rollout was successful and only 1 deployed tag exists
+            # 2 (upwards).. mixed states.. failed deployment, other (same named) containers in other deployments etc..
+
+            if len(tags) == 0:
+                print("[ ] Failed... there are no containers:{}, in namespace: {} with tag: {}".format(
+                    container,
+                    namespace,
+                    tag)
+                )
+
+            if len(tags) == 1:
+                # print("[ ] Only 1 tag match for containers:{}, in namespace: {} with tag: {}".format(
+                #     container,
+                #     namespace,
+                #     tag)
+                # )
+                if tags[0] != tag:
+                    print("[!] WOOPS.. active tag: '{}' != '{}' .. maybe the deployment didn't happen yet?".format(
+                          tags[0], tag))
+                else:
+                    print("[!] GOOD.. active tag: '{}' == '{}' .. ".format(
+                          tags[0], tag))
+                    #TODO: nice to exit with info on how long this took
+                    print(response.text)
+                    sys.exit(0)
+            if len(tags) > 1:
+                print("[!] There are multiple tags deployed with this namespace/container combo")
+                print("[!] Namely: {}" + str(tags))
+
+        print("[ ] Retrying in {}s".format(delay))
+        time.sleep(delay)
 
     print("[!] Failed... script timed out")
     sys.exit(1)
