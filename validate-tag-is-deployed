@@ -10,7 +10,7 @@ import time
 # configs for colored logging
 coloredlogs.install(
     level="INFO",
-    fmt="%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s \n%(message)s"
+    fmt="%(asctime)s %(message)s"
 )
 
 
@@ -35,15 +35,16 @@ def validate_tags(namespace, container, tag, prometheus, timeout, delay):
     # final constructed URL
     url = '{}/api/v1/query?query={}'.format(prometheus, query)
 
-    msg = """[-] validating deployment with the following parameters:
-    prometheus: {}
-    containers: {}
-    namespace: {}
-    tag: {}
-    ---
-    query: {}
-    url: {}
-    ---""".format(
+    msg = """[-]
+validating deployment with the following parameters:
+prometheus: {}
+containers: {}
+namespace: {}
+tag: {}
+---
+query: {}
+url: {}
+---""".format(
         prometheus,
         container,
         namespace,
@@ -58,13 +59,13 @@ def validate_tags(namespace, container, tag, prometheus, timeout, delay):
         try:
             response = requests.get(url)
         except requests.exceptions.RequestException as e:
-            logging.exception(e)
+            logging.error(e)
             sys.exit(1)
 
         if response.status_code != 200:
-            logging.error('[!] request to {} failed'.format(url))
+            logging.error("[!] request failed (didn't get a 200)".format(url))
         elif response.status_code == 400:
-            logging.error("[!] bad query..")
+            logging.error("[!] http 400 received from prometheus (bad query)")
             logging.debug(response.text)
             sys.exit(1)
         else:
@@ -103,7 +104,7 @@ def validate_tags(namespace, container, tag, prometheus, timeout, delay):
                 #     tag)
                 # )
                 if tags[0] != tag:
-                    logging.error("[!] WOOPS.. active tag: '{}' != '{}' .. maybe the deployment didn't happen yet?".format(
+                    logging.error("[!] active tag: '{}' != '{}' .. maybe the deployment didn't happen yet?".format(
                         tags[0], tag))
                 else:
                     logging.info("[*] GOOD.. active tag: '{}' == '{}' .. ".format(
@@ -119,10 +120,10 @@ def validate_tags(namespace, container, tag, prometheus, timeout, delay):
                     [!] Namely: {}""".format(
                     str(tags)))
 
-        print("[-] Retrying in {}s".format(delay))
         time.sleep(delay)
 
-    logging.error("[!] Failed... script timed out")
+    logging.error("[!] Failed... script timed out after {}s (use --timeout to extend)".format(
+        timeout))
     sys.exit(1)
 
 
