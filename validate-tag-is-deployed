@@ -1,47 +1,78 @@
 #!/usr/bin/env python3
 
 import click
+import coloredlogs
+import logging
 import requests
 import sys
 import time
 
+# configs for colored logging
+coloredlogs.install(
+    level="INFO",
+    fmt="%(asctime)s %(message)s"
+)
+
 
 @click.command()
-@click.option("--timeout", default=300, help="how long to keep trying for")
-@click.option("--namespace", default="dev", help="Namespace to search")
 @click.option("--container", default="sample-spring", help="Container name (NOTE.. not pod or deployment)")
-@click.option("--tag", default='latest', help="Desired tag")
+@click.option("--delay", default=10, help="Delay between attempts")
+@click.option("--namespace", default="dev", help="Namespace to search")
 @click.option("--prometheus", default="https://prometheus.example.com", help="URL of prometheus endpoint")
-def validate_tags(namespace, container, tag, prometheus, timeout):
-    # calculate the scripts "deadline".. we'll exit at this point
-    deadline = time.time() + int(timeout)
-    # NOTE: assumes kube-state-metrics
-    query = "count(kube_pod_container_info{{namespace='{0}',container='{1}'}}) by (image)".format(
-                namespace,
-                container,
-        )
-    api_url = '{0}/api/v1/query?query={1}'.format(prometheus, query)
+@click.option("--tag", default='latest', help="Desired tag")
+@click.option("--timeout", default=300, help="How long to keep trying for?")
+def validate_tags(namespace, container, tag, prometheus, timeout, delay):
 
-    print("asking prometheus about: containers:{}, in namespace: {} with tag: {}".format(
+    # script start time
+    start = time.time()
+    # calculate the scripts "deadline".. we'll exit at this point
+    deadline = start + int(timeout)
+    # NOTE: assumes kube-state-metrics
+    query = "count(kube_pod_container_info{{namespace='{}',container='{}'}}) by (image)".format(
+            namespace,
+            container
+    )
+    # final constructed URL
+    url = '{}/api/v1/query?query={}'.format(prometheus, query)
+
+    msg = """[-] validating deployment with the following parameters:
+---
+[>] prometheus: {}
+[>] containers: {}
+[>] namespace: {}
+[>] tag: {}
+---
+[>] query: {}
+[>] url: {}
+---""".format(
+        prometheus,
         container,
         namespace,
-        tag)
-    )
+        tag,
+        query,
+        url)
+
+    logging.info(msg)
 
     while time.time() < deadline:
 
-        # TODO: try and handle requests
-        response = requests.get(api_url)
+        try:
+            response = requests.get(url)
+        except requests.exceptions.RequestException as e:
+            logging.error(e)
+            sys.exit(1)
+
         if response.status_code != 200:
-            print('[!] Request to {} failed'.format(api_url))
-        else: #we got a 200
-            print("[ ] got a 200 on the query (good)")
+            logging.error("[!] request failed (didn't get a 200)".format(
+                url))
+        elif response.status_code == 400:
+            logging.error("[!] http 400 received from prometheus (bad query)")
+            logging.debug(response.text)
+            sys.exit(1)
+        else:
             json_data = response.json()
-            # TODO: logging.debug
-            # print(json_data)
             metrics = json_data['data']['result']
             tags = list(map(lambda x: x['metric']['image'].split(":")[1], metrics))
-
             # Now we must make some assumptions
             # 1. There is ONLY supposed to be on deployed container matching your tag
             #    as a rollout/deploy occurs two tags will exist
@@ -59,29 +90,35 @@ def validate_tags(namespace, container, tag, prometheus, timeout):
             # 2 (upwards).. mixed states.. failed deployment, other (same named) containers in other deployments etc..
 
             if len(tags) == 0:
-                print("[ ] Failed... there are no containers:{}, in namespace: {} with tag: {}".format(
+                logging.error("[!] failed... there are no containers:{}, in namespace: {} with tag: {}".format(
                     container,
                     namespace,
                     tag)
                 )
 
             if len(tags) == 1:
-                print("[ ] only 1 tag match for containers:{}, in namespace: {} with tag: {}".format(
-                    container,
-                    namespace,
-                    tag)
-                )
                 if tags[0] != tag:
-                    print("[!] tags don't match.. maybe the deployment didn't happen yet?")
+                    logging.error("[!] active tag: '{}' != '{}' .. maybe the deployment didn't happen yet?".format(
+                        tags[0], tag))
                 else:
-                    print("[*] Successfully Validated!")
-                    #TODO: nice to exit with info on how long this took
+                    logging.info("[*] GOOD.. active tag: '{}' == '{}' .. ".format(
+                        tags[0], tag))
+                    # script end time
+                    end = time.time()
+                    logging.info("[-] time taken: {}s".format(end - start))
+                    logging.debug(response.text)
                     sys.exit(0)
             if len(tags) > 1:
-                print("[!] there are multiple tags deployed with this namespace/container combo")
-                print("[!] namely: {}" + str(tags))
-        print("[ ] retrying in 5s")
-        time.sleep(5)
+                logging.error("""
+                    [!] there are multiple tags deployed with this namespace/container combo
+                    [!] namely: {}""".format(
+                    str(tags)))
+
+        time.sleep(delay)
+
+    logging.error("[!] failed... script timed out after {}s (use --timeout to extend)".format(
+        timeout))
+    sys.exit(1)
 
 
 if __name__ == '__main__':

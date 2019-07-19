@@ -8,11 +8,12 @@ RUN tar xvf helm.tgz && chmod +x linux-amd64/helm
 
 
 ###
-FROM alpine
+FROM python:3-alpine
 ENV PYTHONUNBUFFERED=1
-RUN apk --update --upgrade add bash git py3-click py3-requests py3-yaml
+RUN apk --update --upgrade add bash git
+COPY requirements.txt /
+RUN pip3 install -r requirements.txt
 COPY --from=0 /src/linux-amd64/helm /bin/.
 RUN helm init --client-only && \
   helm plugin install https://github.com/chartmuseum/helm-push
 COPY . /
-
