@@ -30,20 +30,20 @@ def validate_tags(namespace, container, tag, prometheus, timeout, delay):
     # NOTE: assumes kube-state-metrics
     query = "count(kube_pod_container_info{{namespace='{}',container='{}'}}) by (image)".format(
             namespace,
-            container,
+            container
     )
     # final constructed URL
     url = '{}/api/v1/query?query={}'.format(prometheus, query)
 
-    msg = """[-]
-validating deployment with the following parameters:
-prometheus: {}
-containers: {}
-namespace: {}
-tag: {}
+    msg = """[-] validating deployment with the following parameters:
 ---
-query: {}
-url: {}
+[>] prometheus: {}
+[>] containers: {}
+[>] namespace: {}
+[>] tag: {}
+---
+[>] query: {}
+[>] url: {}
 ---""".format(
         prometheus,
         container,
@@ -63,15 +63,14 @@ url: {}
             sys.exit(1)
 
         if response.status_code != 200:
-            logging.error("[!] request failed (didn't get a 200)".format(url))
+            logging.error("[!] request failed (didn't get a 200)".format(
+                url))
         elif response.status_code == 400:
             logging.error("[!] http 400 received from prometheus (bad query)")
             logging.debug(response.text)
             sys.exit(1)
         else:
             json_data = response.json()
-            # TODO: logging.debug
-            # print(json_data)
             metrics = json_data['data']['result']
             tags = list(map(lambda x: x['metric']['image'].split(":")[1], metrics))
             # Now we must make some assumptions
@@ -91,18 +90,13 @@ url: {}
             # 2 (upwards).. mixed states.. failed deployment, other (same named) containers in other deployments etc..
 
             if len(tags) == 0:
-                logging.error("[ ] Failed... there are no containers:{}, in namespace: {} with tag: {}".format(
+                logging.error("[!] failed... there are no containers:{}, in namespace: {} with tag: {}".format(
                     container,
                     namespace,
                     tag)
                 )
 
             if len(tags) == 1:
-                # print("[ ] Only 1 tag match for containers:{}, in namespace: {} with tag: {}".format(
-                #     container,
-                #     namespace,
-                #     tag)
-                # )
                 if tags[0] != tag:
                     logging.error("[!] active tag: '{}' != '{}' .. maybe the deployment didn't happen yet?".format(
                         tags[0], tag))
@@ -111,18 +105,18 @@ url: {}
                         tags[0], tag))
                     # script end time
                     end = time.time()
-                    logging.info("[-] time taken: {}".format(end - start))
+                    logging.info("[-] time taken: {}s".format(end - start))
                     logging.debug(response.text)
                     sys.exit(0)
             if len(tags) > 1:
                 logging.error("""
-                    [!] There are multiple tags deployed with this namespace/container combo
-                    [!] Namely: {}""".format(
+                    [!] there are multiple tags deployed with this namespace/container combo
+                    [!] namely: {}""".format(
                     str(tags)))
 
         time.sleep(delay)
 
-    logging.error("[!] Failed... script timed out after {}s (use --timeout to extend)".format(
+    logging.error("[!] failed... script timed out after {}s (use --timeout to extend)".format(
         timeout))
     sys.exit(1)
 
