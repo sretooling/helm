@@ -11,6 +11,9 @@ for CHART in $@ ; do
     # that script exits with a 1 if we should push
     if [ "X$rc" == "X0" ]; then
       set -eu
+      cd "${CHART}"
+      helm dep build
+      cd -
       helm push \
         --username="${HELM_REPO_USER}" \
         --password="${HELM_REPO_PASS}" \
