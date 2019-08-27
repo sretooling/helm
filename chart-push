@@ -10,8 +10,10 @@ for CHART in $@ ; do
     echo "[== rc:${rc} ==]"
     # that script exits with a 1 if we should push
     if [ "X$rc" == "X0" ]; then
-      set -eu
+      set -eux
       cd "${CHART}"
+      # Pulling sub-chart if required
+      helm add repo main "${HELM_REPO_HOST}"
       helm dep build
       cd -
       helm push \
@@ -19,7 +21,7 @@ for CHART in $@ ; do
         --password="${HELM_REPO_PASS}" \
         "${CHART}" \
         "${HELM_REPO_HOST}"
-      set +e
+      set +ex
     fi
   fi
 done
