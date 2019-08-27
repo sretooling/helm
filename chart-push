@@ -13,7 +13,7 @@ for CHART in $@ ; do
       set -eux
       cd "${CHART}"
       # Pulling sub-chart if required
-      helm add repo main "${HELM_REPO_HOST}"
+      helm repo add main "${HELM_REPO_HOST}"
       helm dep build
       cd -
       helm push \
